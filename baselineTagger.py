@@ -246,7 +246,7 @@ def main():
                     loss.backward()
                     optimizer.step()
 
-            print("Loss: %f" % loss.cpu().numpy())
+            print("Loss: %f" % loss.detach().cpu().numpy())
             print("Accuracy: %f" % (correct / tokens))
             print("Saving model..")
             torch.save(tagger_model, args.model_name)
