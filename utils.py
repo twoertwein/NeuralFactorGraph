@@ -8,7 +8,6 @@ import re
 import matplotlib
 import numpy as np
 import torch
-from torch.autograd import Variable
 
 from conllu import parse, parse_tree
 from tags import Tags
@@ -246,7 +245,7 @@ def plot_heatmap(uniqueTags, weights, kind):
             plt.tick_params(labelsize=25)
             plt.xlabel(tag2.name, fontsize=40)
             plt.ylabel(tag1.name, fontsize=50)
-            plt.imshow(weight.data.cpu().numpy(), cmap="Reds", interpolation="nearest")
+            plt.imshow(weight.cpu().numpy(), cmap="Reds", interpolation="nearest")
             plt.savefig(
                 "figures/" + tag1.name + "_" + tag2.name + ".png", bbox_inches="tight"
             )
@@ -262,7 +261,7 @@ def plot_heatmap(uniqueTags, weights, kind):
             plt.tick_params(labelsize=40)
             plt.xlabel(tag.name, fontsize=50)
             plt.ylabel(tag.name, fontsize=50)
-            plt.imshow(weight.data.cpu().numpy(), cmap="Greys", interpolation="nearest")
+            plt.imshow(weight.cpu().numpy(), cmap="Greys", interpolation="nearest")
             plt.savefig(
                 "figures/" + tag.name + "_" + tag.name + ".png", bbox_inches="tight"
             )
@@ -270,7 +269,6 @@ def plot_heatmap(uniqueTags, weights, kind):
 
 
 def get_var(x, gpu=False, volatile=False):
-    x = Variable(x, volatile=volatile)
     if gpu:
         x = x.cuda()
     return x
@@ -287,7 +285,7 @@ def prepare_sequence(seq, to_ix, gpu=False):
 
 def to_scalar(var):
     # returns a python float
-    return var.view(-1).data.tolist()[0]
+    return var.cpu().item()
 
 
 def argmax(vec):

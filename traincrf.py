@@ -350,12 +350,12 @@ def main():
                 loss = tagger_model.compute_loss(all_factors_batch, loss_function)
                 # print("Loss:", loss)
 
-                cum_loss += loss.cpu().data[0]
+                cum_loss += loss.cpu().item()
                 loss.backward()
                 # tagger_model.gradient_check(all_factors_batch[0])
                 optimizer.step()
 
-            print("Loss: %f" % loss.cpu().data.numpy())
+            print("Loss: %f" % loss.cpu().numpy())
             print("Saving model..")
             torch.save(tagger_model, args.model_name)
             if (epoch + 1) % 4 == 0:

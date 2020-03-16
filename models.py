@@ -201,7 +201,7 @@ class BiLSTMTagger(nn.Module):
         if self.sum_word_char:
             mask = torch.FloatTensor(
                 [
-                    1 if self.word_freq[int(w.cpu().data.numpy())] >= 5 else 0
+                    1 if self.word_freq[int(w.cpu().numpy())] >= 5 else 0
                     for w in word_idxs
                 ]
             ).cuda()
@@ -236,7 +236,7 @@ class BiLSTMTagger(nn.Module):
             tag_space_2 = self.hidden2tag_2(lstm_out.view(char_embs.size(0), -1))
             tag_space = [
                 tag_space_1[i] if idx == 0 else tag_space_2[i]
-                for i, idx in enumerate(idxs.cpu().data.numpy().flatten())
+                for i, idx in enumerate(idxs.cpu().numpy().flatten())
             ]
             tag_space = torch.stack(tag_space)
 

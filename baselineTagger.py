@@ -239,14 +239,14 @@ def main():
                         tag_scores = tagger_model(sent_in, word_idxs=word_seq)
 
                     values, indices = torch.max(tag_scores, 1)
-                    out_tags = indices.cpu().data.numpy().flatten()
-                    correct += np.count_nonzero(out_tags == targets.cpu().data.numpy())
+                    out_tags = indices.cpu().numpy().flatten()
+                    correct += np.count_nonzero(out_tags == targets.cpu().numpy())
                     loss = loss_function(tag_scores, targets)
                     cum_loss += loss.cpu().item()
                     loss.backward()
                     optimizer.step()
 
-            print("Loss: %f" % loss.cpu().data.numpy())
+            print("Loss: %f" % loss.cpu().numpy())
             print("Accuracy: %f" % (correct / tokens))
             print("Saving model..")
             torch.save(tagger_model, args.model_name)
@@ -316,10 +316,10 @@ def eval(tagger_model, curEpoch=None, dev_or_test="dev"):
             tag_scores = tagger_model(sent_in, word_idxs=word_seq, test=True)
 
         values, indices = torch.max(tag_scores, 1)
-        out_tags = indices.cpu().data.numpy().flatten()
+        out_tags = indices.cpu().numpy().flatten()
         hypTags += [labels_to_ix[idx] for idx in out_tags]
         goldTags.append(morph)
-        targets = targets.cpu().data.numpy()
+        targets = targets.cpu().numpy()
         correct += np.count_nonzero(out_tags == targets)
         toks += len(sentence)
 
