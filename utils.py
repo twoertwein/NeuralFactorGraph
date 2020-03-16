@@ -1,6 +1,7 @@
 from __future__ import division, print_function
-from conllu.parser import parse, parse_tree
+from conllu import parse, parse_tree
 from tags import Tags, Tag, Label
+
 
 import os
 import re
@@ -16,7 +17,10 @@ import matplotlib.pyplot as plt
 import torch
 from torch.autograd import Variable
 import torch.nn.functional as F
-np.set_printoptions(threshold=np.nan)
+#np.set_printoptions(threshold=np.nan)
+import sys
+reload(sys)
+sys.setdefaultencoding('utf-8')
 
 
 FROZEN_TAG = "__frozen__"

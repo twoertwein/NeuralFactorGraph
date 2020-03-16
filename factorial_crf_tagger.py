@@ -1,7 +1,6 @@
 from __future__ import division, print_function
 from message import Factor, Var, FactorGraph, Messages
 import utils
-import bp
 
 import numpy as np
 import string

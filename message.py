@@ -4,7 +4,7 @@ from torch.autograd import Variable
 import numpy as np
 import pdb
 import sys
-np.set_printoptions(threshold=np.nan)
+#np.set_printoptions(threshold=np.nan)
 
 
 class FactorGraph:
