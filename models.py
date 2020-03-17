@@ -297,7 +297,7 @@ class LinearChainCRF(torch.nn.Module):
     def log_score(self, scores, states):
         batch, seq, _ = scores.shape
 
-        score = self.sink[states[0]] + scores[:, 0, states[:, 0]]
+        score = self.sink[states[:, 0]] + scores[:, 0, states[:, 0]]
         for t in range(1, seq):
             score = (
                 score
