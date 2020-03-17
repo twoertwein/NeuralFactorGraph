@@ -252,3 +252,88 @@ class BiLSTMTagger(nn.Module):
             tag_scores = tag_scores + pred_lang_scores.repeat(1, self.tagset_size)
 
         return tag_scores
+
+
+class LinearChainCRF(torch.nn.Module):
+    def __init__(self, states: int = -1):
+        super(LinearChainCRF, self).__init__()
+
+        self.states = states
+        self.transition = nn.Parameter(torch.randn(states, states))
+        self.source = nn.Parameter(torch.rand(states))
+        self.sink = nn.Parameter(torch.rand(states))
+
+    def viterbi_decode(self, scores):
+        batch, seq, _ = scores.shape
+
+        transition = self.transition.expand(batch, -1, -1)
+
+        alphas = torch.zeros(
+            (batch, self.states), device=scores.device, dtype=scores.dtype
+        )
+        best_children = torch.zeros((batch, seq, self.states), dtype=int)
+        index = list(range(scores.shape[-1]))
+
+        # forward pass
+        for t in range(seq):
+            possible_alphas = alphas[:, :, None] + scores[:, t, None]
+            if t != 0:
+                possible_alphas = possible_alphas + transition
+            else:
+                possible_alphas = possible_alphas + self.source.expand(batch, 1, -1)
+            if t == seq - 1:
+                possible_alphas = possible_alphas + self.sink.expand(batch, 1, -1)
+            best_children[:, t, :] = torch.max(possible_alphas, dim=1).indices
+            alphas = possible_alphas[:, best_children[:, t, :], index][:, 0, :]
+
+        # backward from best state
+        states = -torch.ones((batch, seq), dtype=int)
+        states[:, -1] = torch.max(alphas, dim=1).indices
+        for t in range(seq - 1, 0, -1):
+            states[:, t - 1] = best_children[:, t, states[:, t]]
+
+        return alphas[:, states[:, -1]], states
+
+    def log_score(self, scores, states):
+        batch, seq, _ = scores.shape
+
+        score = self.sink[states[0]] + scores[:, 0, states[:, 0]]
+        for t in range(1, seq):
+            score = (
+                score
+                + scores[:, t, states[:, t]]
+                + self.transition[states[:, t - 1], states[:, t]]
+            )
+        return score + self.sink[states[:, -1]]
+
+    def neg_log_likelihood(self, scores, states):
+        losses = self.log_partition(scores) - self.log_score(scores, states)
+        assert (losses > 0).all()
+        return losses.mean()
+
+    def log_partition(self, scores):
+        batch, seq, _ = scores.shape
+        transition = self.transition.expand(batch, -1, -1)
+        score = torch.zeros(
+            (batch, self.states), dtype=scores.dtype, device=scores.device
+        )
+
+        for t in range(seq):
+            tmp = score[:, :, None] + scores[:, t, None]
+            if t != 0:
+                tmp = tmp + transition
+            else:
+                tmp = tmp + self.source.expand(batch, 1, -1)
+            score = torch.logsumexp(tmp, 1)
+        return torch.logsumexp(score + self.sink, 1)
+
+
+class BiLSTMCRFTagger(BiLSTMTagger):
+    def __init__(self, *args, **kwargs):
+        super(BiLSTMCRFTagger, self).__init__(*args, **kwargs)
+
+        self.crf = LinearChainCRF(states=args[-4])
+
+    def forward(self, *args, **kwargs):
+        scores = super().forward(*args, **kwargs)
+        return scores, self.crf.viterbi_decode(scores[None, :, :])[-1][0, :]

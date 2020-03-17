@@ -47,6 +47,7 @@ parser.add_argument("--sent_attn", action="store_true")
 parser.add_argument("--patience", type=int, default=3)
 parser.add_argument("--test", action="store_true")
 parser.add_argument("--gpu", action="store_true")
+parser.add_argument("--baseline_crf", action="store_true")
 parser.add_argument("--seed", type=int, default=42)
 args = parser.parse_args()
 print(args)
@@ -141,7 +142,11 @@ def main():
                 tagger_model = tagger_model.cuda()
 
         else:
-            tagger_model = models.BiLSTMTagger(
+            tagger_model = models.BiLSTMTagger
+            if args.baseline_crf:
+                tagger_model = models.BiLSTMCRFTagger
+
+            tagger_model = tagger_model(
                 args.model_type,
                 args.sum_word_char,
                 word_freq,
@@ -238,10 +243,18 @@ def main():
                     else:
                         tag_scores = tagger_model(sent_in, word_idxs=word_seq)
 
-                    values, indices = torch.max(tag_scores, 1)
-                    out_tags = indices.cpu().numpy().flatten()
+                    if isinstance(tag_scores, tuple):
+                        tag_scores, out_tags = tag_scores
+                    else:
+                        values, out_tags = torch.max(tag_scores, 1)
+                    out_tags = out_tags.cpu().numpy().flatten()
                     correct += np.count_nonzero(out_tags == targets.cpu().numpy())
-                    loss = loss_function(tag_scores, targets)
+                    if hasattr(tagger_model, "crf"):
+                        loss = tagger_model.crf.neg_log_likelihood(
+                            tag_scores[None, :], targets[None, :]
+                        )
+                    else:
+                        loss = loss_function(tag_scores, targets)
                     cum_loss += loss.cpu().item()
                     loss.backward()
                     optimizer.step()
