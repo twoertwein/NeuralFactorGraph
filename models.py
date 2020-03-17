@@ -258,20 +258,17 @@ class LinearChainCRF(torch.nn.Module):
     def __init__(self, states: int = -1):
         super(LinearChainCRF, self).__init__()
 
-        self.states = states
         self.transition = nn.Parameter(torch.randn(states, states))
         self.source = nn.Parameter(torch.rand(states))
         self.sink = nn.Parameter(torch.rand(states))
 
     def viterbi_decode(self, scores):
-        batch, seq, _ = scores.shape
+        batch, seq, states = scores.shape
 
         transition = self.transition.expand(batch, -1, -1)
 
-        alphas = torch.zeros(
-            (batch, self.states), device=scores.device, dtype=scores.dtype
-        )
-        best_children = torch.zeros((batch, seq, self.states), dtype=int)
+        alphas = torch.zeros((batch, states), device=scores.device, dtype=scores.dtype)
+        best_children = torch.zeros((batch, seq, states), dtype=int)
         index = list(range(scores.shape[-1]))
 
         # forward pass
@@ -297,7 +294,7 @@ class LinearChainCRF(torch.nn.Module):
     def log_score(self, scores, states):
         batch, seq, _ = scores.shape
 
-        score = self.sink[states[:, 0]] + scores[:, 0, states[:, 0]]
+        score = self.source[states[:, 0]] + scores[:, 0, states[:, 0]]
         for t in range(1, seq):
             score = (
                 score
@@ -308,15 +305,13 @@ class LinearChainCRF(torch.nn.Module):
 
     def neg_log_likelihood(self, scores, states):
         losses = self.log_partition(scores) - self.log_score(scores, states)
-        assert (losses > 0).all()
+        assert (losses > -1e-10).all()
         return losses.mean()
 
     def log_partition(self, scores):
-        batch, seq, _ = scores.shape
+        batch, seq, states = scores.shape
         transition = self.transition.expand(batch, -1, -1)
-        score = torch.zeros(
-            (batch, self.states), dtype=scores.dtype, device=scores.device
-        )
+        score = torch.zeros((batch, states), dtype=scores.dtype, device=scores.device)
 
         for t in range(seq):
             tmp = score[:, :, None] + scores[:, t, None]
