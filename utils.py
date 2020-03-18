@@ -7,6 +7,7 @@ import re
 
 import matplotlib
 import numpy as np
+np.random.seed(1)
 import torch
 
 from conllu import parse, parse_tree
@@ -15,7 +16,7 @@ from tags import Tags
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt  # isort:skip
-
+from collections import defaultdict
 
 FROZEN_TAG = "__frozen__"
 
@@ -476,3 +477,41 @@ def getCorrectCount(golds, hyps):
             correct += 1
 
     return correct
+
+
+def make_bucket_batches(data_collections, feature_wise_tgt_tags, batch_size):
+    # Data are bucketed according to the length of the first item in the data_collections.
+    buckets = defaultdict(list)
+    data_collections = list(data_collections)
+    tot_items = len(data_collections[0])
+    for data_item in data_collections:
+        src = data_item[0]
+        buckets[len(src)].append(data_item)
+
+    batches = []
+    # np.random.seed(2)
+    for src_len in buckets:
+        bucket = buckets[src_len]
+        np.random.shuffle(bucket)
+
+        num_batches = int(np.ceil(len(bucket) * 1.0 / batch_size))
+        for i in range(num_batches):
+            cur_batch_size = batch_size if i < num_batches - 1 else len(bucket) - batch_size * i
+            batch = [[bucket[i * batch_size + j][k] for j in range(cur_batch_size)] for k in range(tot_items)]
+
+            if feature_wise_tgt_tags is not None:
+                batch_tgt_tags = defaultdict(list)
+                #batch_known_tgt_tags = defaultdict(list)
+                for feat, all_tgt_tags in feature_wise_tgt_tags.items():
+                    for sent_index in batch[-1]:
+                        batch_tgt_tags[feat].append(all_tgt_tags[sent_index])
+
+                batch.append(batch_tgt_tags)
+                #batch.append(batch_known_tgt_tags)
+
+
+            batches.append(batch)
+
+
+    np.random.shuffle(batches)
+    return batches

@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--treebank_path",
     type=str,
-    default="/projects/tir2/users/cmalaviy/ud_exp/ud-treebanks-v2.1/",
+    default="/Users/aditichaudhary/Documents/CMU/Typ_dara/",
 )
 parser.add_argument(
     "--optim", type=str, default="adam", choices=["sgd", "adam", "adagrad", "rmsprop"]
@@ -30,7 +30,7 @@ parser.add_argument("--batch_size", type=int, default=16)
 parser.add_argument(
     "--langs",
     type=str,
-    default="uk",
+    default="mr",
     help="Languages separated by delimiter '/' with last language being target language",
 )
 parser.add_argument("--tgt_size", type=int, default=None)
