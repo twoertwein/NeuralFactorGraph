@@ -61,14 +61,17 @@ def main():
             cum_loss = 0
             correct = 0
             print("Starting epoch %d .." % epoch)
-            batches = utils.make_bucket_batches(zip(sents, char_sents, langs, sent_index), tgt_tags, args.batch_size)
+            batches = utils.make_bucket_batches(zip(sents, char_sents, langs, sent_index), tgt_tags, 1)
             for b_sents, b_char_sents, b_langs, b_sentindex, b_tgt_tags in batches:
                 tagger_model.zero_grad()
-                b_sents_tensor = utils.get_var(torch.LongTensor(b_sents), args.gpu)
-                b_char_sents_tensor = utils.get_var(torch.LongTensor(b_char_sents), args.gpu)
+                b_sents_tensor = utils.get_var(torch.LongTensor(b_sents[0]), args.gpu)
+                b_char_sents_tensor = []
+                for word in b_char_sents[0]:
+                    b_char_sents_tensor.append(utils.get_var(torch.LongTensor(word), args.gpu))
+                #b_char_sents_tensor = utils.get_var(torch.LongTensor(b_char_sents[0]), args.gpu)
                 tagger_model.char_hidden = tagger_model.init_hidden()
                 tagger_model.hidden = tagger_model.init_hidden()
-                b_tgt_tags_feature = utils.get_var(torch.LongTensor(b_tgt_tags[feature]), args.gpu)
+                b_tgt_tags_feature = utils.get_var(torch.LongTensor(b_tgt_tags[feature][0]), args.gpu)
 
                 if args.model_type == "specific" or args.model_type == "joint":
                     tag_scores = tagger_model(
@@ -93,12 +96,41 @@ def main():
                 loss.backward()
                 optimizer.step()
 
+                if sent % 100 == 0:
+                    print(
+                        "[Epoch %d] \
+                        Sentence %d/%d, \
+                        Tokens %d \
+                        Cum_Loss: %f \
+                        Average Accuracy: %f"
+                        % (
+                            epoch,
+                            sent,
+                            len(sents),
+                            tokens,
+                            cum_loss / tokens,
+                            correct / tokens,
+                        )
+                    )
 
+                sent += 1
 
+            print("Loss: %f" % loss.detach().cpu().numpy())
+            print("Accuracy: %f" % (correct / tokens))
+            print("Saving model..")
+            torch.save(tagger_model, args.model_name)
+            print("Evaluating on dev set...")
 
+    else:
+        print("Loading tagger model from " + args.model_name + "...")
+        tagger_model = torch.load(
+            args.model_name, map_location=lambda storage, loc: storage
+        )
+        if args.gpu:
+            tagger_model = tagger_model.cuda()
 
-
-
+    if args.test:
+        avg_tok_accuracy, f1_score = eval(tagger_model, dev_or_test="test")
 
 
 
