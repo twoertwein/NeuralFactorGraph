@@ -165,8 +165,7 @@ class DataLoader(object):
                 pos = fields[3]
                 if feats == "_": #No Morph tags, for each feature assingn "_"
                     for key in self.tag_to_ids.keys():
-                        if key != "POS":
-                            temp_feats[key].append(self.tag_to_ids[key]["_"])
+                        temp_feats[key].append(self.tag_to_ids[key]["_"])
                 else:
                     addedFeats = set()
                     keyvalue_set = list(set(feats.split("|")))

@@ -95,6 +95,7 @@ def main():
                 cum_loss += loss.cpu().item()
                 loss.backward()
                 optimizer.step()
+                tokens += len(b_sents[0]) * len(b_sents)
 
                 if sent % 100 == 0:
                     print(
@@ -114,6 +115,7 @@ def main():
                     )
 
                 sent += 1
+
 
             print("Loss: %f" % loss.detach().cpu().numpy())
             print("Accuracy: %f" % (correct / tokens))
