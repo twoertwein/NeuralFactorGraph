@@ -1,8 +1,16 @@
-import argparse, dataloader, torch, random, os, models, utils
+import argparse
+import os
+import random
 from collections import defaultdict
+
+import numpy as np
+import torch
 import torch.nn as nn
 import torch.optim as optim
-import numpy as np
+
+import dataloader
+import models
+import utils
 
 
 def main():
@@ -39,8 +47,6 @@ def main():
             if args.gpu:
                 tagger_model = tagger_model.cuda()
 
-        loss_function = nn.NLLLoss()
-
         if args.optim == "sgd":
             optimizer = optim.SGD(tagger_model.parameters(), lr=0.1)
         elif args.optim == "adam":
@@ -51,51 +57,45 @@ def main():
             optimizer = optim.RMSprop(tagger_model.parameters())
 
         print("Training tagger model...")
-        patience_counter = 0
-        prev_avg_tok_accuracy = 0
 
         for epoch in range(args.epochs):
-            accuracies = []
             sent = 0
-            tokens = 0
+            tokens = 0.0
             cum_loss = 0
             correct = 0
             print("Starting epoch %d .." % epoch)
-            batches = utils.make_bucket_batches(zip(sents, char_sents, langs, sent_index), tgt_tags, 1)
+            batches = utils.make_bucket_batches(
+                zip(sents, char_sents, langs, sent_index), tgt_tags, args.batch_size
+            )
             for b_sents, b_char_sents, b_langs, b_sentindex, b_tgt_tags in batches:
                 tagger_model.zero_grad()
-                b_sents_tensor = utils.get_var(torch.LongTensor(b_sents[0]), args.gpu)
                 b_char_sents_tensor = []
-                for word in b_char_sents[0]:
-                    b_char_sents_tensor.append(utils.get_var(torch.LongTensor(word), args.gpu))
-                #b_char_sents_tensor = utils.get_var(torch.LongTensor(b_char_sents[0]), args.gpu)
-                tagger_model.char_hidden = tagger_model.init_hidden()
-                tagger_model.hidden = tagger_model.init_hidden()
-                b_tgt_tags_feature = utils.get_var(torch.LongTensor(b_tgt_tags[feature][0]), args.gpu)
+                for character_sentence in b_char_sents:
+                    b_char_sents_tensor.append([])
+                    for word in character_sentence:
+                        word = torch.LongTensor(word)
+                        if args.gpu:
+                            word = word.cuda()
+                        b_char_sents_tensor[-1].append(word)
+                b_tgt_tags_feature = torch.LongTensor(
+                    [b_tgt_tags[feature][i] for i in range(len(b_sents))]
+                )
 
-                if args.model_type == "specific" or args.model_type == "joint":
-                    tag_scores = tagger_model(
-                        b_char_sents_tensor, word_idxs=b_sents_tensor, lang=lang
-                    )
-                else:
-                    tag_scores = tagger_model(b_char_sents_tensor, word_idxs=b_sents_tensor)
+                # get prediction
+                tag_scores, out_tags = tagger_model(b_char_sents_tensor)
 
-                if isinstance(tag_scores, tuple):
-                    tag_scores, out_tags = tag_scores
-                else:
-                    values, out_tags = torch.max(tag_scores, 1)
-                out_tags = out_tags.cpu().numpy().flatten()
-                correct += np.count_nonzero(out_tags == b_tgt_tags_feature.cpu().numpy())
-                if hasattr(tagger_model, "crf"):
-                    loss = tagger_model.crf.neg_log_likelihood(
-                        tag_scores[None, :], b_tgt_tags_feature[None, :]
-                    )
-                else:
-                    loss = loss_function(tag_scores, b_tgt_tags_feature)
-                cum_loss += loss.cpu().item()
+                # accuracy
+                out_tags = out_tags.cpu()
+                correct += (out_tags == b_tgt_tags_feature).sum()
+                tokens += out_tags.shape[0] * out_tags.shape[1]
+
+                # loss
+                loss = tagger_model.crf.neg_log_likelihood(
+                    tag_scores, b_tgt_tags_feature
+                )
+                cum_loss += loss.detach().cpu().item()
                 loss.backward()
                 optimizer.step()
-                tokens += len(b_sents[0]) * len(b_sents)
 
                 if sent % 100 == 0:
                     print(
@@ -116,7 +116,6 @@ def main():
 
                 sent += 1
 
-
             print("Loss: %f" % loss.detach().cpu().numpy())
             print("Accuracy: %f" % (correct / tokens))
             print("Saving model..")
@@ -133,8 +132,6 @@ def main():
 
     if args.test:
         avg_tok_accuracy, f1_score = eval(tagger_model, dev_or_test="test")
-
-
 
 
 if __name__ == "__main__":
@@ -193,7 +190,9 @@ if __name__ == "__main__":
     random.seed(args.seed)
 
     all_langs = args.langs.split("/")
-    args.model_name += "_" + args.model_type + "".join(["_" + l for l in all_langs])# Set model name
+    args.model_name += (
+        "_" + args.model_type + "".join(["_" + l for l in all_langs])
+    )  # Set model name
     if args.sent_attn:
         args.model_name += "-sent_attn"
     if args.tgt_size:
@@ -201,9 +200,11 @@ if __name__ == "__main__":
 
     data_loader = dataloader.DataLoader(args)
 
-    sents, char_sents, tgt_tags, langs= [], [], defaultdict(list), []
+    sents, char_sents, tgt_tags, langs = [], [], defaultdict(list), []
     for lang in all_langs:
-        input_folder = args.treebank_path + "/" + "UD_" + data_loader.code_to_lang[lang] + "//"
+        input_folder = (
+            args.treebank_path + "/" + "UD_" + data_loader.code_to_lang[lang] + "//"
+        )
         print("Reading files from folder", input_folder)
         for [path, dir, files] in os.walk(input_folder):
             for file in files:
@@ -212,8 +213,9 @@ if __name__ == "__main__":
                     print("Reading from, ", train_path)
                     break
 
-
-        lang_sents, lang_char_sents, lang_tgt_tags = data_loader.get_data_set(train_path, lang)
+        lang_sents, lang_char_sents, lang_tgt_tags = data_loader.get_data_set(
+            train_path, lang
+        )
         # Oversample target language data
         if args.tgt_size == 100 and args.model_type != "mono" and lang == all_langs[-1]:
             sents += lang_sents * 10
