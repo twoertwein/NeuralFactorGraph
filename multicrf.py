@@ -100,14 +100,14 @@ def main():
                 if sent % 100 == 0:
                     print(
                         "[Epoch %d] \
-                        Sentence %d/%d, \
+                        Batches %d/%d, \
                         Tokens %d \
                         Cum_Loss: %f \
                         Average Accuracy: %f"
                         % (
                             epoch,
                             sent,
-                            len(sents),
+                            len(batches),
                             tokens,
                             cum_loss / tokens,
                             correct / tokens,
