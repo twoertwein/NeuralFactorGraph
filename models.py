@@ -257,17 +257,11 @@ class BiLSTMTagger(nn.Module):
 class BiLSTMTaggerBatched(nn.Module):
     def __init__(
         self,
-        model_type,
-        sum_word_char,
-        word_freq,
-        sent_attn,
-        langs,
         embedding_dim,
         hidden_dim,
-        mlp_size,
         char_vocab_size,
         word_vocab_size,
-        tagset_size,
+        tagset_sizes={},
         n_layers=2,
         dropOut=0.2,
         gpu=False,
@@ -275,19 +269,11 @@ class BiLSTMTaggerBatched(nn.Module):
 
         super().__init__()
 
-        assert not sum_word_char
-        assert not sent_attn
-        assert model_type == "baseline"
-
         self.embedding_dim = embedding_dim
-        self.mlp_size = mlp_size
         self.hidden_dim = hidden_dim
         self.char_vocab_size = char_vocab_size
         self.word_vocab_size = word_vocab_size
-        self.tagset_size = tagset_size
         self.n_layers = n_layers
-        self.word_freq = word_freq
-        self.langs = langs
         self.gpu = gpu
 
         # CharLSTM
@@ -311,7 +297,12 @@ class BiLSTMTaggerBatched(nn.Module):
         )
 
         # The linear layer that maps from hidden state space to tag space
-        self.hidden2tag = nn.Linear(2 * self.hidden_dim, self.tagset_size)
+        self.hidden2tag = torch.nn.ModuleDict(
+            {
+                key: nn.Linear(2 * self.hidden_dim, value)
+                for key, value in tagset_sizes.items()
+            }
+        )
 
     def forward(self, sentences):
         """
@@ -338,8 +329,10 @@ class BiLSTMTaggerBatched(nn.Module):
         )
         words = self.lstm(words)[0]
 
-        tag_space = self.hidden2tag(words)
-        return F.log_softmax(tag_space, dim=-1)
+        tag_space = {}
+        for key, hidden2tag in self.hidden2tag.items():
+            tag_space[key] = F.log_softmax(hidden2tag(words), dim=-1)
+        return tag_space
 
 
 class LinearChainCRF(torch.nn.Module):
@@ -415,8 +408,27 @@ class BiLSTMCRFTagger(BiLSTMTaggerBatched):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.crf = LinearChainCRF(states=args[-4])
+        self.crfs = torch.nn.ModuleDict(
+            {
+                tag: LinearChainCRF(states=tag_size)
+                for tag, tag_size in kwargs["tagset_sizes"].items()
+            }
+        )
 
     def forward(self, *args, **kwargs):
         scores = super().forward(*args)
-        return scores, self.crf.viterbi_decode(scores)[-1]
+        for tag, tag_scores in scores.items():
+            scores[tag] = {
+                "scores": tag_scores,
+                "states": self.crfs[tag].viterbi_decode(tag_scores)[-1],
+            }
+        return scores
+
+    def neg_log_likelihood(self, scores, states):
+        loss = 0.0
+        for tag, tag_dict in scores.items():
+            loss = loss + self.crfs[tag].neg_log_likelihood(
+                tag_dict["scores"], states[tag]
+            )
+
+        return loss

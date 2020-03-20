@@ -3,9 +3,7 @@ import os
 import random
 from collections import defaultdict
 
-import numpy as np
 import torch
-import torch.nn as nn
 import torch.optim as optim
 
 import dataloader
@@ -21,31 +19,22 @@ def main():
             tagger_model = torch.load(
                 args.model_name, map_location=lambda storage, loc: storage
             )
-            if args.gpu:
-                tagger_model = tagger_model.cuda()
 
         else:
-            feature = "POS"
             tagger_model = models.BiLSTMCRFTagger
 
             tagger_model = tagger_model(
-                args.model_type,
-                args.sum_word_char,
-                data_loader.word_freq,
-                args.sent_attn,
-                langs,
                 args.emb_dim,
                 args.hidden_dim,
-                args.mlp_dim,
                 len(data_loader.char_to_id),
                 len(data_loader.word_to_id),
-                data_loader.tag_vocab_sizes[feature],
-                args.n_layers,
-                args.dropout,
-                args.gpu,
+                tagset_sizes=data_loader.tag_vocab_sizes,
+                n_layers=args.n_layers,
+                dropOut=args.dropout,
+                gpu=args.gpu,
             )
-            if args.gpu:
-                tagger_model = tagger_model.cuda()
+        if args.gpu:
+            tagger_model = tagger_model.cuda()
 
         if args.optim == "sgd":
             optimizer = optim.SGD(tagger_model.parameters(), lr=0.1)
@@ -67,7 +56,7 @@ def main():
             batches = utils.make_bucket_batches(
                 zip(sents, char_sents, langs, sent_index), tgt_tags, args.batch_size
             )
-            for b_sents, b_char_sents, b_langs, b_sentindex, b_tgt_tags in batches:
+            for _, b_char_sents, _, _, b_tgt_tags in batches:
                 tagger_model.zero_grad()
                 b_char_sents_tensor = []
                 for character_sentence in b_char_sents:
@@ -77,22 +66,31 @@ def main():
                         if args.gpu:
                             word = word.cuda()
                         b_char_sents_tensor[-1].append(word)
-                b_tgt_tags_feature = torch.LongTensor(
-                    [b_tgt_tags[feature][i] for i in range(len(b_sents))]
-                )
+                b_tags = {
+                    feature: torch.LongTensor(
+                        [b_tgt_tags[feature][i] for i in range(len(b_char_sents))]
+                    )
+                    for feature in data_loader.tag_vocab_sizes
+                }
 
                 # get prediction
-                tag_scores, out_tags = tagger_model(b_char_sents_tensor)
+                tag_dict = tagger_model(b_char_sents_tensor)
 
                 # accuracy
-                out_tags = out_tags.cpu()
-                correct += (out_tags == b_tgt_tags_feature).sum()
-                tokens += out_tags.shape[0] * out_tags.shape[1]
+                correct += sum(
+                    [
+                        (out_tags["states"] == b_tags[tag]).sum().item()
+                        for tag, out_tags in tag_dict.items()
+                    ]
+                )
+                tokens += (
+                    len(b_char_sents)
+                    * tag_dict["POS"]["states"].shape[1]
+                    * len(tag_dict)
+                )
 
                 # loss
-                loss = tagger_model.crf.neg_log_likelihood(
-                    tag_scores, b_tgt_tags_feature
-                )
+                loss = tagger_model.neg_log_likelihood(tag_dict, b_tags)
                 cum_loss += loss.detach().cpu().item()
                 loss.backward()
                 optimizer.step()
