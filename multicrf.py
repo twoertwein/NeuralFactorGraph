@@ -17,7 +17,7 @@ def main():
                 tagger_model = tagger_model.cuda()
 
         else:
-            feature = "POS"
+
             tagger_model = models.BiLSTMCRFTagger
 
             tagger_model = tagger_model(
@@ -135,7 +135,74 @@ def main():
         avg_tok_accuracy, f1_score = eval(tagger_model, dev_or_test="test")
 
 
+def eval(tagger_model, curEpoch=None, dev_or_test="dev"):
+    lang = all_langs[-1]
+    eval_data = (dev_sents, dev_char_sents, dev_tgt_tags) if dev_or_test == "dev" else (test_sents, test_char_sents, test_tgt_tags)
+    correct = 0
+    toks = 0
+    hypTags = []
+    goldTags = []
+    all_out_tags = np.array([])
+    all_targets = np.array([])
+    print(
+        "Starting evaluation on %s set... (%d sentences)"
+        % (dev_or_test, len(eval_data[0]))
+    )
+    lang_id = []
+    if args.model_type == "universal":
+        lang_id = [lang]
+    s = 0
+    (sents, char_sents, tgt_tags) = eval_data
+    labels_to_ix = data_loader.id2tags[feature]
+    for sent, char_sent, tgt_tag in zip(sents, char_sents, tgt_tags[feature]):
+        tagger_model.zero_grad()
+        tagger_model.char_hidden = tagger_model.init_hidden()
+        tagger_model.hidden = tagger_model.init_hidden()
+        sent_in = []
+        b_sents_tensor = utils.get_var(torch.LongTensor(sent), args.gpu)
+        b_char_sents_tensor = []
+        for word in char_sent:
+            b_char_sents_tensor.append(utils.get_var(torch.LongTensor(word), args.gpu))
+        b_tgt_tags_feature = utils.get_var(torch.LongTensor(tgt_tag), args.gpu)
+        word_seq = None
 
+        tag_scores = tagger_model(sent_in, word_idxs=word_seq, test=True)
+
+        values, indices = torch.max(tag_scores, 1)
+        out_tags = indices.cpu().numpy().flatten()
+        hypTags += [labels_to_ix[idx] for idx in out_tags]
+        goldTags.append(tgt_tag)
+        correct += np.count_nonzero(out_tags == tgt_tag)
+        toks += len(sent)
+
+    avg_tok_accuracy = correct / toks
+
+    prefix = args.model_type + "_"
+
+    if dev_or_test == "dev":
+        prefix += "-".join([l for l in langs]) + "_" + dev_or_test + "_" + str(curEpoch)
+    else:
+        prefix += "-".join([l for l in langs]) + "_" + dev_or_test
+
+    if args.tgt_size:
+        prefix += "_" + str(args.tgt_size)
+
+    finalTgts = []
+    for tags in goldTags:
+        for tag in tags:
+            finalTgts.append(tag)
+
+    f1_score, f1_micro_score = utils.computeF1(
+        hypTags, finalTgts, prefix, labels_to_ix, baseline=True, write_results=True
+    )
+    print("Test Set Accuracy: %f" % avg_tok_accuracy)
+    print("Test Set Avg F1 Score (Macro): %f" % f1_score)
+    print("Test Set Avg F1 Score (Micro): %f" % f1_micro_score)
+
+    with open(prefix + "_results_f1.txt", "a") as file:
+        file.write("\nAccuracy: " + str(avg_tok_accuracy) + "\n")
+
+    return avg_tok_accuracy, f1_score
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -230,4 +297,22 @@ if __name__ == "__main__":
 
     sent_index = [i for i in range(len(sents))]
     print("Data set size (train): %d" % len(sents))
+
+    lang = all_langs[-1]
+    for file in os.listdir(args.treebank_path + "UD_" + data_loader.code_to_lang[lang]):
+        if file.endswith("dev.conllu"):
+            dev_path = os.path.join(
+                args.treebank_path + "UD_" + data_loader.code_to_lang[lang], file
+            )
+
+
+        elif file.endswith("test.conllu"):
+            test_path = os.path.join(
+                args.treebank_path + "UD_" + data_loader.code_to_lang[lang], file
+            )
+
+
+    dev_sents, dev_char_sents, dev_tgt_tags = data_loader.get_data_set(dev_path, all_langs[-1])
+    test_sents, test_char_sents, test_tgt_tags = data_loader.get_data_set(test_path, all_langs[-1])
+    feature = "POS"
     main()
