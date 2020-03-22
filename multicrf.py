@@ -206,6 +206,36 @@ def eval(tagger_model, curEpoch=None, dev_or_test="dev"):
                 goldTags.append(word_dict)
             sentences.append([data_loader.id_to_word[id] for id in sent[0]])
 
+            for token_num in range(1, len(sent[0])-1):
+                info = ["_" for _ in range(10)]
+                info[0] = str(token_num)
+                info[1] = data_loader.id_to_word[sent[0][token_num]]
+                pred_tagdict = one_prediction[token_num]
+                gold_tagdict = one_gold[token_num]
+                pred_tags = []
+                gold_tags = []
+                for k,v in pred_tagdict.items():
+                    if k == "POS":
+                        if v == "NULL":
+                            v = "_"
+                        info[3] = v
+                    elif v != "NULL":
+                        pred_tags.append(k + "=" + v)
+                for k,v in gold_tagdict.items():
+                    if k == "POS":
+                        if v == "NULL":
+                            v = "_"
+                        info[3] = v
+                    elif v != "NULL":
+                        gold_tags.append(k + "=" + v)
+                if len(pred_tags) == 0:
+                    info[5] = "_"
+                else:
+                    info[5] = "|".join(pred_tags)
+                fout.write("\t".join(info) + "\n")
+            fout.write("\n")
+
+
             # accuracy
             correct += sum(
                 [
