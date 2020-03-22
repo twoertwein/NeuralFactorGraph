@@ -24,7 +24,7 @@ class Lemmatizer(nn.Module):
         dropOut=0.2,
         gpu=False,
     ):
-        super(Lemmatizer, self).__init__()
+        super().__init__()
 
         self.embedding_dim = embedding_dim
         self.mlp_size = mlp_size
@@ -90,7 +90,7 @@ class BiLSTMTagger(nn.Module):
         gpu=False,
     ):
 
-        super(BiLSTMTagger, self).__init__()
+        super().__init__()
 
         self.model_type = model_type
         self.embedding_dim = embedding_dim
@@ -254,9 +254,90 @@ class BiLSTMTagger(nn.Module):
         return tag_scores
 
 
+class BiLSTMTaggerBatched(nn.Module):
+    def __init__(
+        self,
+        embedding_dim,
+        hidden_dim,
+        char_vocab_size,
+        word_vocab_size,
+        tagset_sizes={},
+        n_layers=2,
+        dropOut=0.2,
+        gpu=False,
+    ):
+
+        super().__init__()
+
+        self.embedding_dim = embedding_dim
+        self.hidden_dim = hidden_dim
+        self.char_vocab_size = char_vocab_size
+        self.word_vocab_size = word_vocab_size
+        self.n_layers = n_layers
+        self.gpu = gpu
+
+        # CharLSTM
+        self.char_embeddings = nn.Embedding(self.char_vocab_size, self.embedding_dim)
+        self.char_lstm = nn.LSTM(
+            self.embedding_dim,
+            self.hidden_dim,
+            batch_first=True,
+            num_layers=self.n_layers,
+            dropout=dropOut,
+            bidirectional=True,
+        )
+
+        self.lstm = nn.LSTM(
+            self.hidden_dim * 2,
+            self.hidden_dim,
+            num_layers=self.n_layers,
+            dropout=dropOut,
+            bidirectional=True,
+            batch_first=True,
+        )
+
+        # The linear layer that maps from hidden state space to tag space
+        self.hidden2tag = torch.nn.ModuleDict(
+            {
+                key: nn.Linear(2 * self.hidden_dim, value)
+                for key, value in tagset_sizes.items()
+            }
+        )
+
+    def forward(self, sentences):
+        """
+        words: list (sentences) of lists (words) of tensors (character)
+        """
+        # get the embedding for each character
+        embeds = [
+            self.char_embeddings(word) for sentence in sentences for word in sentence
+        ]
+
+        # process each word individually
+        lengths = [word.shape[0] for word in embeds]
+        embeds = torch.nn.utils.rnn.pad_sequence(embeds, batch_first=True)
+        embeds = torch.nn.utils.rnn.pack_padded_sequence(
+            embeds, lengths, batch_first=True, enforce_sorted=False
+        )
+        words = self.char_lstm(embeds)[0]
+        words, lengths = torch.nn.utils.rnn.pad_packed_sequence(words, batch_first=True)
+        words = words[range(len(lengths)), lengths - 1, :]
+
+        # process each sentence individually
+        words = words.reshape(
+            len(sentences), int(words.shape[0] / len(sentences)), words.shape[1]
+        )
+        words = self.lstm(words)[0]
+
+        tag_space = {}
+        for key, hidden2tag in self.hidden2tag.items():
+            tag_space[key] = F.log_softmax(hidden2tag(words), dim=-1)
+        return tag_space
+
+
 class LinearChainCRF(torch.nn.Module):
     def __init__(self, states: int = -1):
-        super(LinearChainCRF, self).__init__()
+        super().__init__()
 
         self.transition = nn.Parameter(torch.randn(states, states))
         self.source = nn.Parameter(torch.rand(states))
@@ -287,19 +368,19 @@ class LinearChainCRF(torch.nn.Module):
         states = -torch.ones((batch, seq), dtype=int)
         states[:, -1] = torch.max(alphas, dim=1).indices
         for t in range(seq - 1, 0, -1):
-            states[:, t - 1] = best_children[:, t, states[:, t]]
+            states[:, t - 1] = best_children[range(batch), t, states[:, t]]
 
-        return alphas[:, states[:, -1]], states
+        return alphas[range(batch), states[:, -1]], states
 
     def log_score(self, scores, states):
         batch, seq, _ = scores.shape
 
-        score = self.source[states[:, 0]] + scores[:, 0, states[:, 0]]
+        score = self.source[states[:, 0]] + scores[range(batch), 0, states[:, 0]]
         for t in range(1, seq):
             score = (
                 score
-                + scores[:, t, states[:, t]]
-                + self.transition[states[:, t - 1], states[:, t]]
+                + scores[range(batch), t, states[:, t]]
+                + self.transition[None, states[:, t - 1], states[:, t]]
             )
         return score + self.sink[states[:, -1]]
 
@@ -323,12 +404,31 @@ class LinearChainCRF(torch.nn.Module):
         return torch.logsumexp(score + self.sink, 1)
 
 
-class BiLSTMCRFTagger(BiLSTMTagger):
+class BiLSTMCRFTagger(BiLSTMTaggerBatched):
     def __init__(self, *args, **kwargs):
-        super(BiLSTMCRFTagger, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
-        self.crf = LinearChainCRF(states=args[-4])
+        self.crfs = torch.nn.ModuleDict(
+            {
+                tag: LinearChainCRF(states=tag_size)
+                for tag, tag_size in kwargs["tagset_sizes"].items()
+            }
+        )
 
     def forward(self, *args, **kwargs):
-        scores = super().forward(*args, **kwargs)
-        return scores, self.crf.viterbi_decode(scores[None, :, :])[-1][0, :]
+        scores = super().forward(*args)
+        for tag, tag_scores in scores.items():
+            scores[tag] = {
+                "scores": tag_scores,
+                "states": self.crfs[tag].viterbi_decode(tag_scores)[-1],
+            }
+        return scores
+
+    def neg_log_likelihood(self, scores, states):
+        loss = 0.0
+        for tag, tag_dict in scores.items():
+            loss = loss + self.crfs[tag].neg_log_likelihood(
+                tag_dict["scores"], states[tag]
+            )
+
+        return loss

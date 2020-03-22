@@ -377,7 +377,7 @@ def logNormalizeTensor(a):
 
 
 def computeF1(
-    hyps, golds, prefix, labels_to_ix=None, baseline=False, write_results=False
+    hyps, golds, prefix, baseline=False, write_results=False
 ):
     """
   hyps: List of dicts for predicted morphological tags
@@ -417,7 +417,7 @@ def computeF1(
     # calculate recall
     for i, word_tags in enumerate(golds, start=0):
         for k, v in word_tags.items():
-            if v == "NULL":
+            if v == "_":
                 continue
             if k not in f1_recall_scores:
                 f1_recall_scores[k] = 0
@@ -453,8 +453,7 @@ def computeF1(
 
     if write_results:
         print("Writing F1 scores...")
-        with open(prefix + "_results_f1.txt", "ab") as file:
-            file.write(pickle.dumps(f1_scores))
+        with open(prefix + "_results_f1.txt", "a") as file:
             file.write("\nMacro-averaged F1 Score: " + str(f1_average))
             file.write("\nMicro-averaged F1 Score: " + str(f1_micro_score))
 
@@ -479,7 +478,7 @@ def getCorrectCount(golds, hyps):
     return correct
 
 
-def make_bucket_batches(data_collections, feature_wise_tgt_tags, batch_size):
+def make_bucket_batches(data_collections, feature_wise_tgt_tags, batch_size, shuffle=True):
     # Data are bucketed according to the length of the first item in the data_collections.
     buckets = defaultdict(list)
     data_collections = list(data_collections)
@@ -492,7 +491,8 @@ def make_bucket_batches(data_collections, feature_wise_tgt_tags, batch_size):
     # np.random.seed(2)
     for src_len in buckets:
         bucket = buckets[src_len]
-        np.random.shuffle(bucket)
+        if shuffle:
+            np.random.shuffle(bucket)
 
         num_batches = int(np.ceil(len(bucket) * 1.0 / batch_size))
         for i in range(num_batches):
@@ -512,6 +512,6 @@ def make_bucket_batches(data_collections, feature_wise_tgt_tags, batch_size):
 
             batches.append(batch)
 
-
-    np.random.shuffle(batches)
+    if shuffle:
+        np.random.shuffle(batches)
     return batches
