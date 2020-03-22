@@ -224,6 +224,7 @@ def eval(tagger_model, curEpoch=None, dev_or_test="dev"):
                 for k,v in gold_tagdict.items():
                     if k == "POS":
                         if v == "NULL":
+                            
                             v = "_"
                         info[3] = v
                     elif v != "NULL":
