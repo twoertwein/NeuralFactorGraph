@@ -1,16 +1,16 @@
 import argparse
+import codecs
 import os
 import random
 from collections import defaultdict
-import numpy as np
 
+import numpy as np
 import torch
 import torch.optim as optim
 
 import dataloader
 import models
 import utils
-import codecs
 
 
 def main():
@@ -21,7 +21,6 @@ def main():
             tagger_model = torch.load(
                 args.model_name, map_location=lambda storage, loc: storage
             )
-
 
         else:
             tagger_model = models.BiLSTMCRFTagger
@@ -49,6 +48,8 @@ def main():
             optimizer = optim.RMSprop(tagger_model.parameters())
 
         print("Training tagger model...")
+        prev_avg_tok_accuracy = 0
+        patience_counter = 0
 
         for epoch in range(args.epochs):
             sent = 0
@@ -121,7 +122,22 @@ def main():
             print("Accuracy: %f" % (correct / tokens))
             print("Saving model..")
             torch.save(tagger_model, args.model_name)
+
             print("Evaluating on dev set...")
+            avg_tok_accuracy = eval(tagger_model, curEpoch=epoch, dev_or_test="dev")[0]
+
+            # Early Stopping
+            if avg_tok_accuracy <= prev_avg_tok_accuracy:
+                patience_counter += 1
+                if patience_counter == args.patience:
+                    print(
+                        "Model hasn't improved on dev set for %d epochs. Stopping Training."
+                        % patience_counter
+                    )
+                    break
+            else:
+                patience_counter = 0
+            prev_avg_tok_accuracy = max(prev_avg_tok_accuracy, avg_tok_accuracy)
 
     else:
         print("Loading tagger model from " + args.model_name + "...")
@@ -137,32 +153,32 @@ def main():
 
 
 def eval(tagger_model, curEpoch=None, dev_or_test="dev"):
-    lang = all_langs[-1]
-    eval_data = (dev_sents, dev_char_sents, dev_tgt_tags) if dev_or_test == "dev" else (test_sents, test_char_sents, test_tgt_tags)
+    eval_data = (
+        (dev_sents, dev_char_sents, dev_tgt_tags)
+        if dev_or_test == "dev"
+        else (test_sents, test_char_sents, test_tgt_tags)
+    )
     correct = 0
     print(
         "Starting evaluation on %s set... (%d sentences)"
         % (dev_or_test, len(eval_data[0]))
     )
-    lang_id = []
-    if args.model_type == "universal":
-        lang_id = [lang]
-    s = 0
     (sents, char_sents, tgt_tags) = eval_data
     prefix = args.model_type + "_"
     if dev_or_test == "dev":
-        prefix += "-".join([l for l in all_langs]) + "_" + dev_or_test + "_" + str(curEpoch)
+        prefix += (
+            "-".join([l for l in all_langs]) + "_" + dev_or_test + "_" + str(curEpoch)
+        )
     else:
         prefix += "-".join([l for l in all_langs]) + "_" + dev_or_test
-    predictions, sentences, tokens, goldTags = [],[], 0, []
-    with codecs.open(prefix, "w", encoding='utf-8') as fout:
+    predictions, sentences, tokens, goldTags = [], [], 0, []
+    with codecs.open(prefix, "w", encoding="utf-8") as fout:
 
         batches = utils.make_bucket_batches(
             zip(sents, char_sents, langs, sent_index), tgt_tags, 1, shuffle=False
         )
         for sent, char_sent, _, _, tgt_tag in batches:
             tagger_model.zero_grad()
-            sent_in = []
             b_char_sents_tensor = []
             for character_sentence in char_sent:
                 b_char_sents_tensor.append([])
@@ -206,7 +222,7 @@ def eval(tagger_model, curEpoch=None, dev_or_test="dev"):
                 goldTags.append(word_dict)
             sentences.append([data_loader.id_to_word[id] for id in sent[0]])
 
-            for token_num in range(1, len(sent[0])-1):
+            for token_num in range(1, len(sent[0]) - 1):
                 info = ["_" for _ in range(10)]
                 info[0] = str(token_num)
                 info[1] = data_loader.id_to_word[sent[0][token_num]]
@@ -214,17 +230,17 @@ def eval(tagger_model, curEpoch=None, dev_or_test="dev"):
                 gold_tagdict = one_gold[token_num]
                 pred_tags = []
                 gold_tags = []
-                for k,v in pred_tagdict.items():
+                for k, v in pred_tagdict.items():
                     if k == "POS":
                         if v == "NULL":
                             v = "_"
                         info[3] = v
                     elif v != "NULL":
                         pred_tags.append(k + "=" + v)
-                for k,v in gold_tagdict.items():
+                for k, v in gold_tagdict.items():
                     if k == "POS":
                         if v == "NULL":
-                            
+
                             v = "_"
                         info[3] = v
                     elif v != "NULL":
@@ -236,7 +252,6 @@ def eval(tagger_model, curEpoch=None, dev_or_test="dev"):
                 fout.write("\t".join(info) + "\n")
             fout.write("\n")
 
-
             # accuracy
             correct += sum(
                 [
@@ -245,24 +260,22 @@ def eval(tagger_model, curEpoch=None, dev_or_test="dev"):
                 ]
             )
             tokens += (
-                    len(char_sent)
-                    * tag_dict["POS"]["states"].shape[1]
-                    * len(tag_dict)
+                len(char_sent) * tag_dict["POS"]["states"].shape[1] * len(tag_dict)
             )
-
 
     avg_tok_accuracy = correct / tokens
     f1_score, f1_micro_score = utils.computeF1(
         predictions, goldTags, prefix, write_results=True
     )
-    print("Test Set Accuracy: %f" % avg_tok_accuracy)
-    print("Test Set Avg F1 Score (Macro): %f" % f1_score)
-    print("Test Set Avg F1 Score (Micro): %f" % f1_micro_score)
+    print(f"{dev_or_test} Set Accuracy: {avg_tok_accuracy}")
+    print(f"{dev_or_test} Set Avg F1 Score (Macro): {f1_score}")
+    print(f"{dev_or_test} Set Avg F1 Score (Micro): {f1_micro_score}")
 
     with open(prefix + "_results_f1.txt", "a") as file:
         file.write("\nAccuracy: " + str(avg_tok_accuracy) + "\n")
 
     return avg_tok_accuracy, f1_score
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -304,7 +317,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--sum_word_char", action="store_true")
     parser.add_argument("--sent_attn", action="store_true")
-    parser.add_argument("--patience", type=int, default=3)
+    parser.add_argument("--patience", type=int, default=2)
     parser.add_argument("--test", action="store_true")
     parser.add_argument("--visualize", action="store_true")
     parser.add_argument("--gpu", action="store_true")
@@ -370,15 +383,17 @@ if __name__ == "__main__":
                 args.treebank_path + "UD_" + data_loader.code_to_lang[lang], file
             )
 
-
         elif file.endswith("test.conllu"):
             test_path = os.path.join(
                 args.treebank_path + "UD_" + data_loader.code_to_lang[lang], file
             )
 
-
-    dev_sents, dev_char_sents, dev_tgt_tags = data_loader.get_data_set(dev_path, all_langs[-1])
-    test_sents, test_char_sents, test_tgt_tags = data_loader.get_data_set(test_path, all_langs[-1])
+    dev_sents, dev_char_sents, dev_tgt_tags = data_loader.get_data_set(
+        dev_path, all_langs[-1]
+    )
+    test_sents, test_char_sents, test_tgt_tags = data_loader.get_data_set(
+        test_path, all_langs[-1]
+    )
     feature = "POS"
 
     main()
