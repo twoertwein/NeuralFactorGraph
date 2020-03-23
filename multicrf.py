@@ -135,6 +135,9 @@ def main():
                         % patience_counter
                     )
                     break
+            else:
+                patience_counter = 0
+            prev_avg_tok_accuracy = max(prev_avg_tok_accuracy, avg_tok_accuracy)
 
     else:
         print("Loading tagger model from " + args.model_name + "...")
