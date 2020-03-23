@@ -264,9 +264,9 @@ def eval(tagger_model, curEpoch=None, dev_or_test="dev"):
     f1_score, f1_micro_score = utils.computeF1(
         predictions, goldTags, prefix, write_results=True
     )
-    print("Test Set Accuracy: %f" % avg_tok_accuracy)
-    print("Test Set Avg F1 Score (Macro): %f" % f1_score)
-    print("Test Set Avg F1 Score (Micro): %f" % f1_micro_score)
+    print(f"{dev_or_test} Set Accuracy: {avg_tok_accuracy}")
+    print(f"{dev_or_test} Set Avg F1 Score (Macro): {f1_score}")
+    print(f"{dev_or_test} Set Avg F1 Score (Micro): {f1_micro_score}")
 
     with open(prefix + "_results_f1.txt", "a") as file:
         file.write("\nAccuracy: " + str(avg_tok_accuracy) + "\n")
