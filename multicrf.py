@@ -231,24 +231,21 @@ def eval(tagger_model, curEpoch=None, dev_or_test="dev"):
                 pred_tags = []
                 gold_tags = []
                 for k, v in pred_tagdict.items():
-                    if k == "POS":
-                        if v == "NULL":
-                            v = "_"
-                        info[3] = v
-                    elif v != "NULL":
+                    if v != "NULL":
                         pred_tags.append(k + "=" + v)
                 for k, v in gold_tagdict.items():
-                    if k == "POS":
-                        if v == "NULL":
-
-                            v = "_"
-                        info[3] = v
-                    elif v != "NULL":
+                    if v != "NULL":
                         gold_tags.append(k + "=" + v)
+
                 if len(pred_tags) == 0:
                     info[5] = "_"
                 else:
                     info[5] = "|".join(pred_tags)
+
+                if len(gold_tags) == 0:
+                    info[6] = "_"
+                else:
+                    info[6] = "|".join(gold_tags)
                 fout.write("\t".join(info) + "\n")
             fout.write("\n")
 
