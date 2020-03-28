@@ -392,15 +392,12 @@ class LinearChainCRF(torch.nn.Module):
     def log_partition(self, scores):
         batch, seq, states = scores.shape
         transition = self.transition.expand(batch, -1, -1)
-        score = torch.zeros((batch, states), dtype=scores.dtype, device=scores.device)
+        score = scores[:, 0, :] + self.source[None, :]
 
-        for t in range(seq):
-            tmp = score[:, :, None] + scores[:, t, None]
-            if t != 0:
-                tmp = tmp + transition
-            else:
-                tmp = tmp + self.source.expand(batch, 1, -1)
-            score = torch.logsumexp(tmp, 1)
+        for t in range(1, seq):
+            score = torch.logsumexp(
+                score[:, :, None] + scores[:, t, None] + transition, 1
+            )
         return torch.logsumexp(score + self.sink, 1)
 
 
