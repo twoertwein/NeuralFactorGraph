@@ -216,13 +216,13 @@ def eval(tagger_model, curEpoch=None, dev_or_test="dev"):
                     tag_name = data_loader.id2tags[tag][gold_tag_feat]
                     one_gold[token_num][tag] = tag_name
 
-            for word_dict in one_prediction:
+            for word_dict in one_prediction[1:-1]:
                 predictions.append(word_dict)
-            for word_dict in one_gold:
+            for word_dict in one_gold[1:-1]:
                 goldTags.append(word_dict)
-            sentences.append([data_loader.id_to_word[id] for id in sent[0]])
+            sentences.append([data_loader.id_to_word[id] for id in sent[0][1:-1]])
 
-            for token_num in range(1, len(sent[0]) - 1):
+            for token_num in range(len(sent[0])):
                 info = ["_" for _ in range(10)]
                 info[0] = str(token_num)
                 info[1] = data_loader.id_to_word[sent[0][token_num]]
