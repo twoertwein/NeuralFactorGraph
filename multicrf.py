@@ -60,6 +60,7 @@ def main():
             batches = utils.make_bucket_batches(
                 zip(sents, char_sents, langs, sent_index), tgt_tags, args.batch_size
             )
+            tagger_model.train()
             for _, b_char_sents, _, _, b_tgt_tags in batches:
                 tagger_model.zero_grad()
                 b_char_sents_tensor = []
@@ -123,8 +124,15 @@ def main():
             print("Saving model..")
             torch.save(tagger_model, args.model_name)
 
+            if epoch < 2:
+                # skip evaluation the first two epochs
+                continue
             print("Evaluating on dev set...")
-            avg_tok_accuracy = eval(tagger_model, curEpoch=epoch, dev_or_test="dev")[0]
+            with torch.no_grad():
+                tagger_model.eval()
+                avg_tok_accuracy = eval(
+                    tagger_model, curEpoch=epoch, dev_or_test="dev"
+                )[0]
 
             # Early Stopping
             if avg_tok_accuracy <= prev_avg_tok_accuracy:
@@ -149,6 +157,7 @@ def main():
         eval(tagger_model)
 
     if args.test:
+        tagger_model.eval()
         avg_tok_accuracy, f1_score = eval(tagger_model, dev_or_test="test")
 
 
@@ -273,7 +282,8 @@ def eval(tagger_model, curEpoch=None, dev_or_test="dev"):
     print(f"New {dev_or_test} Set F1 Score: {f1}")
     print(f"New {dev_or_test} Set P: {pre}")
     print(f"New {dev_or_test} Set R: {recall}")
-    return avg_tok_accuracy, f1_score
+    return acc, f1
+    # return avg_tok_accuracy, f1_score
 
 
 if __name__ == "__main__":
@@ -316,7 +326,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--sum_word_char", action="store_true")
     parser.add_argument("--sent_attn", action="store_true")
-    parser.add_argument("--patience", type=int, default=2)
+    parser.add_argument("--patience", type=int, default=1)
     parser.add_argument("--test", action="store_true")
     parser.add_argument("--visualize", action="store_true")
     parser.add_argument("--gpu", action="store_true")

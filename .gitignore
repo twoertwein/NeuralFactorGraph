@@ -1,3 +1,5 @@
+*baseline*
+*.txt
 *.c
 *__pycache__
 *.mypy_cache
