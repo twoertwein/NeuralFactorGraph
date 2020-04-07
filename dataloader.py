@@ -1,5 +1,7 @@
 from collections import defaultdict
 import utils, os, codecs
+import random
+random.seed(1)
 
 class DataLoader(object):
     def __init__(self, args):
@@ -64,9 +66,9 @@ class DataLoader(object):
         # word_list = []
         # char_list = []
         # tag_list = []
-        word_dict = defaultdict(lambda: 0)
-        char_set = set()
-        tag_vocab = defaultdict(set)
+        word_dict = {}
+        char_set = {}
+        tag_vocab = {}
 
         def _read_a_file(path, lang):
             fdebug = codecs.open("./debug.txt", "w", encoding='utf-8')
@@ -94,16 +96,19 @@ class DataLoader(object):
         for (path, lang) in paths:
             _read_a_file(path, lang)
 
-        tag2ids = {}
-        for key, tag_set in tag_vocab.items():
-            if key == "_":
-                continue
-            tag_set.add("_")
-            tag2ids[key] = self.get_vocab_from_set(tag_set)
-        word_vocab = self.get_vocab_from_dict(word_dict)
-        char_vocab = self.get_vocab_from_set(char_set, 0)
+        # tag2ids = {}
+        for key  in tag_vocab:
+            if "_" not in tag_vocab[key]:
+                tag_vocab[key]['_'] = len(tag_vocab[key])
+        #     if key == "_":
+        #         continue
+        #     tag_set.add("_")
+        #     sorted(tag_set)
+        #     tag2ids[key] = self.get_vocab_from_set(tag_set)
+        #word_vocab = self.get_vocab_from_dict(word_dict)
+        #char_vocab = self.get_vocab_from_set(char_set, 0)
 
-        return tag2ids, word_vocab, char_vocab
+        return tag_vocab, word_dict, char_set
 
 
     def read_one_line(self, line, tag_set, word_dict, char_set, fdebug, lang):
@@ -121,12 +126,28 @@ class DataLoader(object):
                 print("ERROR: the feature is blank, re-run pretrain_pos")
                 write=True
             for c in word:
-                char_set.add(c)
-            tag_set['POS'].add(pos)
+                if c not in char_set:
+                    char_set[c] = len(char_set)
+
+            if word not in word_dict:
+                word_dict[word] = len(word_dict)
+            #tag_set['POS'].add(pos)
+
+            if 'POS' not in tag_set:
+                tag_set['POS'] = {}
+            if pos not in tag_set['POS']:
+                tag_set['POS'][pos]  = len(tag_set['POS'])
+
+            if feats == "_":
+                continue
             for feat in feats.split("|"):
                 feat_info = feat.split("=")
-                tag_set[feat_info[0]].add(feat_info[-1])
-            word_dict[word] += 1
+                if feat_info[0] not in tag_set:
+                    tag_set[feat_info[0]] = {}
+                if feat_info[-1] not in tag_set[feat_info[0]]:
+                    tag_set[feat_info[0]][feat_info[-1]] = len(tag_set[feat_info[0]])
+
+
         if write:
             for w in line:
                 fdebug.write(w + "\n")
