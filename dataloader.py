@@ -131,7 +131,6 @@ class DataLoader(object):
 
             if word not in word_dict:
                 word_dict[word] = len(word_dict)
-            #tag_set['POS'].add(pos)
 
             if 'POS' not in tag_set:
                 tag_set['POS'] = {}
