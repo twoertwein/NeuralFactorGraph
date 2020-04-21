@@ -12,6 +12,31 @@ import dataloader
 import models
 import utils
 
+DEPENDENCY_DICTS = {
+    "de": {
+        "POS": ["VerbForm", "Case", "PronType", "NumType"],
+        "Case": [],
+        "Number": [],  # missing
+        "Mood": ["Tense"],
+        "Person": ["Polite", "Number[psor]", "VerbForm", "PronType"],
+        "Tense": [],
+        "VerbForm": ["Tense", "Case"],
+        "Definite": ["PronType"],
+        "PronType": ["NumType"],
+        "Degree": ["POS"],
+        "Gender": [],  # missing
+        "Gender[psor]": [],  # missing
+        "Number[psor]": [],
+        "Poss": [],  # missing
+        "NumType": [],
+        "Polarity": [],  # missing
+        "Polite": [],
+        "Reflex": [],  # missing
+        "Typo": [],  # missing
+        "Foreign": [],  # missing
+    }
+}
+
 
 def main():
 
@@ -23,17 +48,24 @@ def main():
             )
 
         else:
-            tagger_model = models.BiLSTMCRFTagger
+            kwargs = {
+                "tagset_sizes": data_loader.tag_vocab_sizes,
+                "n_layers": args.n_layers,
+                "dropOut": args.dropout,
+                "gpu": args.gpu,
+            }
+            if args.model_name.startswith("unary_dependent"):
+                tagger_model = models.BiLSTMCRFUnaryDependentTagger
+                kwargs["dependency_dict"] = DEPENDENCY_DICTS[args.langs]
+            else:
+                tagger_model = models.BiLSTMCRFTagger
 
             tagger_model = tagger_model(
                 args.emb_dim,
                 args.hidden_dim,
                 len(data_loader.char_to_id),
                 len(data_loader.word_to_id),
-                tagset_sizes=data_loader.tag_vocab_sizes,
-                n_layers=args.n_layers,
-                dropOut=args.dropout,
-                gpu=args.gpu,
+                **kwargs,
             )
         if args.gpu:
             tagger_model = tagger_model.cuda()
