@@ -14,26 +14,26 @@ import utils
 
 DEPENDENCY_DICTS = {
     "de": {
-        "POS": ["VerbForm", "Case", "PronType", "NumType"],
-        "Case": [],
-        "Number": [],  # missing
-        "Mood": ["Tense"],
-        "Person": ["Polite", "Number[psor]", "VerbForm", "PronType"],
-        "Tense": [],
-        "VerbForm": ["Tense", "Case"],
+        "POS": ["VerbForm"],
+        "Case": ["POS", "VerbForm"],
+        "Number": [],
+        "Mood": [],
+        "Person": ["Polite", "Case"],
+        "Tense": ["Mood", "VerbForm"],
+        "VerbForm": [],
         "Definite": ["PronType"],
-        "PronType": ["NumType"],
+        "PronType": ["Person", "POS"],
         "Degree": ["POS"],
-        "Gender": [],  # missing
-        "Gender[psor]": [],  # missing
-        "Number[psor]": [],
-        "Poss": [],  # missing
-        "NumType": [],
-        "Polarity": [],  # missing
+        "Gender": [],
+        "Gender[psor]": [],
+        "Number[psor]": ["Person"],
+        "Poss": [],
+        "NumType": ["POS", "PronType"],
+        "Polarity": [],
         "Polite": [],
-        "Reflex": [],  # missing
-        "Typo": [],  # missing
-        "Foreign": [],  # missing
+        "Reflex": [],
+        "Typo": [],
+        "Foreign": [],
     }
 }
 
