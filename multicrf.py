@@ -34,7 +34,28 @@ DEPENDENCY_DICTS = {
         "Reflex": [],
         "Typo": [],
         "Foreign": [],
-    }
+    },
+    "hi": {
+        "POS": ["Case", "Polite"],  # part of loop
+        "Case": ["VerbForm"],  # part of loop
+        "Gender": [],
+        "Number": [],
+        "Person": ["POS", "Tense", "Case", "Polite"],
+        "AdpType": [],
+        "PronType": ["POS"],
+        "Aspect": ["VerbForm"],
+        "VerbForm": ["Polite", "POS"],  # part of loop
+        "Voice": [],
+        "Mood": ["VerbForm", "POS", "Tense", "Polite"],
+        "Tense": [],
+        "AdvType": [],
+        "NumType": ["POS"],
+        "Polite": [],
+        "Poss": [],
+        "Echo": [],
+        "Polarity": [],
+        "Foreign": [],
+    },
 }
 
 
