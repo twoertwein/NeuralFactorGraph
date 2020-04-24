@@ -265,6 +265,7 @@ class BiLSTMTaggerBatched(nn.Module):
         n_layers=2,
         dropOut=0.2,
         gpu=False,
+        do_hidden2tag=True,
     ):
 
         super().__init__()
@@ -297,12 +298,14 @@ class BiLSTMTaggerBatched(nn.Module):
         )
 
         # The linear layer that maps from hidden state space to tag space
-        self.hidden2tag = torch.nn.ModuleDict(
-            {
-                key: nn.Linear(2 * self.hidden_dim, value)
-                for key, value in tagset_sizes.items()
-            }
-        )
+        self.do_hidden2tag = do_hidden2tag
+        if do_hidden2tag:
+            self.hidden2tag = torch.nn.ModuleDict(
+                {
+                    key: nn.Linear(2 * self.hidden_dim, value)
+                    for key, value in tagset_sizes.items()
+                }
+            )
 
     def forward(self, sentences):
         """
@@ -328,6 +331,9 @@ class BiLSTMTaggerBatched(nn.Module):
             len(sentences), int(words.shape[0] / len(sentences)), words.shape[1]
         )
         words = self.lstm(words)[0]
+
+        if not self.do_hidden2tag:
+            return words
 
         tag_space = {}
         for key, hidden2tag in self.hidden2tag.items():
@@ -429,3 +435,56 @@ class BiLSTMCRFTagger(BiLSTMTaggerBatched):
             )
 
         return loss
+
+
+class BiLSTMCRFUnaryDependentTagger(BiLSTMCRFTagger):
+    def __init__(self, *args, dependency_dict={}, **kwargs):
+        """
+        dependency_dict     A dict containing a lsit of parents for ALL tag sets
+                            specified in kwargs["tagset_sizes"].
+        """
+        super().__init__(*args, do_hidden2tag=False, **kwargs)
+        self.dependency_dict = dependency_dict
+
+        # take care of hidden2tag ourselves
+        self.hidden2tag = torch.nn.ModuleDict(
+            {
+                key: nn.Linear(
+                    2 * self.hidden_dim
+                    + sum(
+                        [
+                            kwargs["tagset_sizes"][parent]
+                            for parent in dependency_dict[key]
+                        ]
+                    ),
+                    value,
+                )
+                for key, value in kwargs["tagset_sizes"].items()
+            }
+        )
+
+    def forward(self, *args, **kwargs):
+        results = {}
+        embeddings = {}
+        scores = BiLSTMTaggerBatched.forward(self, *args)
+        # naive search for nodes with processed/no parents
+        while len(embeddings) != len(self.dependency_dict):
+            for node, parents in self.dependency_dict.items():
+                if node in embeddings:
+                    continue
+                if [parent for parent in parents if parent not in embeddings]:
+                    continue
+                embedding = torch.cat(
+                    [scores]
+                    + [embeddings[parent] for parent in sorted(parents) if parent],
+                    dim=-1,
+                )
+
+                embeddings[node] = self.hidden2tag[node](embedding)
+                tag_scores = F.log_softmax(embeddings[node], dim=-1)
+                results[node] = {
+                    "scores": tag_scores,
+                    "states": self.crfs[node].viterbi_decode(tag_scores)[-1],
+                }
+
+        return results

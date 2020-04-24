@@ -12,6 +12,52 @@ import dataloader
 import models
 import utils
 
+DEPENDENCY_DICTS = {
+    "de": {
+        "POS": ["VerbForm"],
+        "Case": ["POS", "VerbForm"],
+        "Number": [],
+        "Mood": [],
+        "Person": ["Polite", "Case"],
+        "Tense": ["Mood", "VerbForm"],
+        "VerbForm": [],
+        "Definite": ["PronType"],
+        "PronType": ["Person", "POS"],
+        "Degree": ["POS"],
+        "Gender": [],
+        "Gender[psor]": [],
+        "Number[psor]": ["Person"],
+        "Poss": [],
+        "NumType": ["POS", "PronType"],
+        "Polarity": [],
+        "Polite": [],
+        "Reflex": [],
+        "Typo": [],
+        "Foreign": [],
+    },
+    "hi": {
+        "POS": ["Case", "Polite"],  # part of loop
+        "Case": ["VerbForm"],  # part of loop
+        "Gender": [],
+        "Number": [],
+        "Person": ["POS", "Tense", "Case", "Polite"],
+        "AdpType": [],
+        "PronType": ["POS"],
+        "Aspect": ["VerbForm"],
+        "VerbForm": ["Polite", "POS"],  # part of loop
+        "Voice": [],
+        "Mood": ["VerbForm", "POS", "Tense", "Polite"],
+        "Tense": [],
+        "AdvType": [],
+        "NumType": ["POS"],
+        "Polite": [],
+        "Poss": [],
+        "Echo": [],
+        "Polarity": [],
+        "Foreign": [],
+    },
+}
+
 
 def main():
 
@@ -23,17 +69,24 @@ def main():
             )
 
         else:
-            tagger_model = models.BiLSTMCRFTagger
+            kwargs = {
+                "tagset_sizes": data_loader.tag_vocab_sizes,
+                "n_layers": args.n_layers,
+                "dropOut": args.dropout,
+                "gpu": args.gpu,
+            }
+            if args.model_name.startswith("unary_dependent"):
+                tagger_model = models.BiLSTMCRFUnaryDependentTagger
+                kwargs["dependency_dict"] = DEPENDENCY_DICTS[args.langs]
+            else:
+                tagger_model = models.BiLSTMCRFTagger
 
             tagger_model = tagger_model(
                 args.emb_dim,
                 args.hidden_dim,
                 len(data_loader.char_to_id),
                 len(data_loader.word_to_id),
-                tagset_sizes=data_loader.tag_vocab_sizes,
-                n_layers=args.n_layers,
-                dropOut=args.dropout,
-                gpu=args.gpu,
+                **kwargs,
             )
         if args.gpu:
             tagger_model = tagger_model.cuda()
