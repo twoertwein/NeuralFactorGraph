@@ -36,15 +36,15 @@ DEPENDENCY_DICTS = {
         "Foreign": [],
     },
     "hi": {
-        "POS": ["Case", "Polite"],  # part of loop
-        "Case": ["VerbForm"],  # part of loop
+        "POS": ["Case", "Polite"],
+        "Case": [],
         "Gender": [],
         "Number": [],
         "Person": ["POS", "Tense", "Case", "Polite"],
         "AdpType": [],
         "PronType": ["POS"],
         "Aspect": ["VerbForm"],
-        "VerbForm": ["Polite", "POS"],  # part of loop
+        "VerbForm": ["Polite", "POS"],
         "Voice": [],
         "Mood": ["VerbForm", "POS", "Tense", "Polite"],
         "Tense": [],
