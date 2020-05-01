@@ -56,6 +56,24 @@ DEPENDENCY_DICTS = {
         "Polarity": [],
         "Foreign": [],
     },
+    # reuse hi for mr (drop Polite, NumType, Mood, PronType)
+    "mr": {
+        "POS": ["Case"],
+        "Case": [],
+        "Gender": [],
+        "Number": [],
+        "Mood": [],
+        "Person": ["POS", "Tense", "Case"],
+        "VerbForm": ["POS"],
+        "Distance": [],
+        "PronType": ["POS"],
+        "Tense": [],
+        "Aspect": ["VerbForm"],
+        "Polarity": [],
+        "Clusivity": [],
+        "InfForm": [],
+        "Voice": [],
+    },
 }
 
 
