@@ -56,22 +56,21 @@ DEPENDENCY_DICTS = {
         "Polarity": [],
         "Foreign": [],
     },
-    # reuse hi for mr (drop Polite, NumType, Mood, PronType)
     "mr": {
-        "POS": ["Case"],
-        "Case": [],
+        "POS": ["PronType"],
+        "Case": ["POS", "InfForm"],
         "Gender": [],
         "Number": [],
-        "Mood": [],
-        "Person": ["POS", "Tense", "Case"],
-        "VerbForm": ["POS"],
-        "Distance": [],
-        "PronType": ["POS"],
+        "Mood": ["Person", "VerbForm"],
+        "Person": [],
+        "VerbForm": ["POS", "Aspect"],
+        "Distance": ["PronType"],
+        "PronType": [],
         "Tense": [],
-        "Aspect": ["VerbForm"],
+        "Aspect": ["Tense"],
         "Polarity": [],
         "Clusivity": [],
-        "InfForm": [],
+        "InfForm": ["VerbForm"],
         "Voice": [],
     },
 }
@@ -106,6 +105,28 @@ def main():
                 len(data_loader.word_to_id),
                 **kwargs,
             )
+        # init from other language
+        init_model = "_".join(
+            args.model_name.split("_")[:-1] + [args.init_from_language]
+        )
+
+        if os.path.isfile(init_model):
+            print("Loading overlapping weights from", init_model)
+            init_model = torch.load(
+                init_model, map_location=lambda storage, loc: storage
+            )
+            init_state = {}
+            tagger_state = tagger_model.state_dict()
+            for name, tensor in init_model.state_dict().items():
+                if name not in tagger_state:
+                    continue
+                if tensor.shape != tagger_state[name].shape:
+                    print("Skipping", name)
+                    continue
+                init_state[name] = tensor
+
+            tagger_model.load_state_dict(init_state, strict=False)
+
         if args.gpu:
             tagger_model = tagger_model.cuda()
 
@@ -388,6 +409,7 @@ if __name__ == "__main__":
         help="Number of training sentences for target language",
     )
     parser.add_argument("--model_name", type=str, default="model_dcrf")
+    parser.add_argument("--init_from_language", type=str, default="")
     parser.add_argument("--continue_train", action="store_true")
     parser.add_argument(
         "--model_type",
